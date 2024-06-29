@@ -1,0 +1,52 @@
+- name: Deploy dockerized web application
+  hosts: webservers
+  become: yes
+  tasks:
+    - name: Ensure docker is installed
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Ensure docker-compose is installed
+      get_url:
+        url: https://github.com/docker/compose/releases/download/1.29.2/docker-compose-`uname -s`-`uname -m`
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+      when: ansible_distribution == "Ubuntu"
+
+    - name: Create project directory
+      file:
+        path: /opt/test_app
+        state: directory
+
+    - name: Copy application files
+      copy:
+        src: ./
+        dest: /opt/test_app/
+        mode: '0755'
+
+    - name: Generate nginx configuration
+      template:
+        src: ./templates/nginx.conf.j2
+        dest: /opt/test_app/nginx/nginx.conf
+      notify: Restart nginx
+
+    - name: Run docker-compose
+      command: docker-compose up -d
+      args:
+        chdir: /opt/test_app
+
+    - name: Check running containers
+      command: docker ps -a
+      register: result
+
+    - debug:
+        var: result.stdout_lines
+
+  handlers:
+    - name: Restart nginx
+      service:
+        name: nginx
+        state: restarted
